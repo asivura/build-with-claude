@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import glob
 import os
 import sys
 import time
@@ -34,31 +35,25 @@ except ImportError:
     raise
 
 
-# Default file set when --files isn't passed. Lists every *.py
-# under buddy/device/ (root + apps/) that ships on the device. The
-# previous list referenced "buddy_ui.py" — that module was renamed
-# to buddy_ui_cp.py during the Cardputer port and the rename never
-# made it here, so a default invocation immediately failed with
-# "no such file or directory".
-DEFAULT_FILES = [
-    "main.py",
-    "buddy_ble.py",
-    "buddy_ui_cp.py",
-    "buddy_state.py",
-    "buddy_chars.py",
-    "buddy_protocol.py",
-    "burst_frames.py",
-    "wifi_event.py",
-    "apps/claude_buddy.py",
-    "apps/hello_cardputer.py",
-    "apps/joke_fetcher.py",
-    "apps/morse.py",
-    "apps/snake.py",
-    "apps/spot_the_diff.py",
-    "apps/whack_a_mole.py",
-]
-
 CHUNK_BYTES = 512  # source bytes per paste-mode write
+
+
+def _discover_files(src_dir: str) -> list[str]:
+    """Return the default upload list by scanning ``src_dir``.
+
+    Mirrors install_apps.py:_plan_uploads — every ``*.py`` at the
+    source root first (peer modules that apps import), then every
+    ``*.py`` under ``apps/`` alphabetically. Returned as basenames
+    relative to ``src_dir`` so the existing upload loop is unchanged.
+    """
+    files: list[str] = []
+    for p in sorted(glob.glob(os.path.join(src_dir, "*.py"))):
+        files.append(os.path.basename(p))
+    apps_dir = os.path.join(src_dir, "apps")
+    if os.path.isdir(apps_dir):
+        for p in sorted(glob.glob(os.path.join(apps_dir, "*.py"))):
+            files.append("apps/" + os.path.basename(p))
+    return files
 
 
 def _drain(s: serial.Serial, wait: float = 0.2) -> bytes:
@@ -160,8 +155,11 @@ def main() -> int:
     ap.add_argument(
         "--files",
         nargs="*",
-        default=DEFAULT_FILES,
-        help="Files to upload (basenames under --src).",
+        default=None,
+        help=(
+            "Explicit basenames to upload (e.g. apps/snake.py). "
+            "Default: every *.py under --src and --src/apps/."
+        ),
     )
     ap.add_argument(
         "--no-reset",
@@ -171,11 +169,34 @@ def main() -> int:
     args = ap.parse_args()
 
     src_dir = os.path.abspath(args.src)
-    for name in args.files:
-        full = os.path.join(src_dir, name)
-        if not os.path.isfile(full):
-            sys.stderr.write("missing source: {}\n".format(full))
+    discovered = _discover_files(src_dir)
+    if args.files is None:
+        files = discovered
+    else:
+        # Match basename against discovered files so a caller can pass
+        # "snake.py" without knowing it lives under apps/. Mirrors
+        # install_apps.py's --files semantics.
+        by_base: dict[str, str] = {}
+        for rel in discovered:
+            by_base.setdefault(os.path.basename(rel), rel)
+        files = []
+        missing = []
+        for w in args.files:
+            if w in discovered:
+                files.append(w)
+            elif os.path.basename(w) in by_base:
+                files.append(by_base[os.path.basename(w)])
+            else:
+                missing.append(w)
+        if missing:
+            sys.stderr.write("missing source(s): {}\n".format(", ".join(missing)))
             return 2
+        seen = set()
+        files = [f for f in files if not (f in seen or seen.add(f))]
+
+    if not files:
+        sys.stderr.write("no .py files found under {}\n".format(src_dir))
+        return 2
 
     s = serial.Serial(args.port, 115200, timeout=1.0)
     try:
@@ -186,7 +207,7 @@ def main() -> int:
         _interrupt(s)
         _drain(s, wait=0.3)
 
-        for name in args.files:
+        for name in files:
             src_path = os.path.join(src_dir, name)
             sys.stderr.write("uploading {}...\n".format(name))
             _upload_file(s, src_path, name)

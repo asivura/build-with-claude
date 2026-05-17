@@ -38,6 +38,25 @@ python3 scripts/repl_run.py --port /dev/cu.usbmodem1101 --script "import os; pri
 
 `gen_burst_frames.py` regenerates `burst_frames.py` from source sprites.
 
+## Updating apps on an already-provisioned device
+
+Two tools, very different blast radius. Reach for the right one.
+
+- **`scripts/push.py` — additive, safe.** Discovers every `*.py` under `buddy/device/` and `buddy/device/apps/` and uploads them. Never deletes anything that's already on the device. This is what you want 99% of the time at an event: a device boots, an app is missing, push it on.
+
+  ```bash
+  python3 scripts/push.py --port /dev/cu.usbmodem1101              # push every .py
+  python3 scripts/push.py --port /dev/cu.usbmodem1101 --files snake.py
+  ```
+
+- **`m5-onboard` skill — destructive, full re-provision.** Wipes flash, reflashes UIFlow firmware, reinstalls the bundle. Use only for a fresh-from-the-box device or one that's truly bricked. **Warning: if your local repo is missing apps that are on the device, `m5-onboard` will silently delete them from `/flash/apps/`.** Run `inventory.py` first to see what you'd be wiping.
+
+- **`scripts/inventory.py` — read-only diagnostic.** Lists what `*.py` files are on the device and diffs them against the local repo. Marks each as `OK`, `STALE` (size mismatch), `MISSING_FROM_DEVICE`, or `EXTRA_ON_DEVICE`. Exits non-zero if anything differs. Run before re-provisioning, or any time you suspect a device is out of sync.
+
+  ```bash
+  python3 scripts/inventory.py --port /dev/cu.usbmodem1101
+  ```
+
 ## References
 
 - `references/` — BLE protocol notes for the Claude Buddy app
