@@ -363,7 +363,7 @@ def _draw_quiz_chrome(score, miss, hint=None):
 def _show_quiz_listen(score, miss):
     """Body during playback: a big '?' so the kid knows it's a
     quiz (not a pattern they can read off the screen)."""
-    _draw_quiz_chrome(score, miss, "listen...  ENT play  ` exit")
+    _draw_quiz_chrome(score, miss, "listening...  SPC skip  ` exit")
     _clear_body()
     try:
         _LCD.setFont(_LCD.FONTS.DejaVu40)
@@ -640,7 +640,7 @@ def _show_settings(volume):
     _set_chrome_font()
     _LCD.fillRect(0, _H - 18, _W, 18, _DARK)
     _LCD.setTextColor(_GRAY_MID, _DARK)
-    hint = "; up   . down   ` back"
+    hint = ";(up) louder   .(down) quieter   ` back"
     _LCD.drawString(hint, (_W - _LCD.textWidth(hint)) // 2, _H - 14)
 
 
@@ -713,20 +713,9 @@ def _key_intent(k):
     POSIX 0x1B: ints 0x1B / 0x08 / 0x09 / 0x7F / 0x03 (ESC, BS,
     TAB, DEL, Ctrl-C) and strings ``esc`` / ``exit`` / ``back`` /
     ``~``. Q is *not* an exit -- it's a Morse letter (``--.-``)
-    and a kid should be able to hear it like every other letter.
-
-    Every key gets logged via ``print`` so its real scancode is
-    visible over USB serial -- if ESC or any other key surprises
-    us we can wire its code in here without guessing."""
+    and a kid should be able to hear it like every other letter."""
     if k is None:
         return None
-    try:
-        print(
-            "morse: key=", repr(k),
-            "type=", type(k).__name__,
-        )
-    except Exception:
-        pass
     if isinstance(k, int):
         if k in (0x1B, 0x08, 0x09, 0x7F, 0x03):
             return ("exit",)

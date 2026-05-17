@@ -201,8 +201,13 @@ def _pick_cell(prev):
 
 def _game_over(kb, score):
     """Blocking end-of-round screen. Returns 'restart' or 'exit'."""
-    # Clear the play area but leave the header + hint strip alone.
+    # Clear the play area and repaint the hint strip for game-over controls.
     _LCD.fillRect(0, 21, _W, _H - 21 - 18, _BLACK)
+    _LCD.fillRect(0, _H - 18, _W, 18, _DARK)
+    _set_font()
+    _LCD.setTextColor(_GRAY_MID, _DARK)
+    go_hint = "R again   Q exit   ESC quit"
+    _LCD.drawString(go_hint, (_W - _LCD.textWidth(go_hint)) // 2, _H - 14)
     _LCD.setTextSize(2)
     _LCD.setTextColor(_ORANGE, _BLACK)
     t = "Time up!"

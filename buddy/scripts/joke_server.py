@@ -61,8 +61,8 @@ JOKES = [
     "Why did the orange stop? It ran out of juice.",
     "What do you call a fake noodle? An impasta.",
     "Why did the can crusher quit? It was soda pressing.",
-    "How do you make a tissue dance? Put a little boogie in it.",
-    "What did the grape say when it got stepped on? Nothing, it just let out a little wine.",
+    "How do you make a tissue dance? Put a little boogie-woogie in it — the music kind!",
+    "What do you call grapes that exercise? Raisin the bar.",
     "Why are ghosts bad at lying? You can see right through them.",
     "What did one hat say to the other? Stay here, I'm going on ahead.",
     "Why don't programmers like nature? It has too many bugs.",
@@ -97,9 +97,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body_b)
 
     def log_message(self, fmt, *args):
-        # Keep request logs on one line; default formatting is noisy.
+        # Use raw IP (not address_string) to avoid reverse-DNS log injection.
         sys.stderr.write(
-            "{} - {}\n".format(self.address_string(), fmt % args)
+            "{} - {}\n".format(self.client_address[0], fmt % args)
         )
 
 

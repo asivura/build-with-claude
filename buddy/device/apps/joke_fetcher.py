@@ -51,7 +51,7 @@ window" is arguably a better kid demo than random trivia anyway.
 ### Layout (240x135)
 
     Header:   y=0..19    DARK band, ORANGE hairline at y=20
-    Trace:    y=24..73   five 10 px rows of step narration
+    Trace:    y=24..53   three 10 px rows of step narration
     Fact:     y=78..114  body text, word-wrapped, CREAM on BLACK
     Hint:     y=117..134 controls
 """
@@ -95,14 +95,14 @@ _FACT_MAX_LINES = 3
 # minus margins is ~228 px, so 19 chars/line is safe with margin.
 _FACT_MAX_CHARS = 19
 
-# Local joke server running on the dev machine. Modern joke APIs
-# are HTTPS-only and the device's TLS context doesn't fit in the
-# free heap on this build, so we host the jokes on the same LAN
-# instead and fetch over plain HTTP. See ``scripts/joke_server.py``.
-# When the device leaves this network this host becomes
-# unreachable -- update the IP to your laptop's LAN address (find
-# it with ``ipconfig getifaddr en0`` on macOS).
-_HOST = "192.168.1.96"
+# --- JOKE SERVER ----------------------------------------------------------
+# Set this to the LAN IP of the machine running scripts/joke_server.py.
+# Find your laptop's IP with:
+#   macOS:   ipconfig getifaddr en0
+#   Linux:   ip -4 addr show | grep inet
+#   Windows: ipconfig | findstr IPv4
+_HOST = "192.168.1.96"   # <-- CHANGE THIS before flashing
+# --------------------------------------------------------------------------
 _PATH = "/joke"
 _PORT = 8080
 
@@ -141,7 +141,7 @@ def _draw_chrome():
     _LCD.drawString("Joke Fetcher", 6, 5)
     _LCD.fillRect(0, _H - 18, _W, 18, _DARK)
     _LCD.setTextColor(_GRAY_MID, _DARK)
-    hint = "SPACE new   ;. scroll   ESC"
+    hint = "SPC/ENT new   ;. scroll   ESC/Q quit"
     _LCD.drawString(hint, (_W - _LCD.textWidth(hint)) // 2, _H - 14)
 
 
@@ -325,12 +325,14 @@ def _no_wifi_screen():
     _LCD.setTextSize(1)
     _LCD.setTextColor(_RED, _BLACK)
     a = "No WiFi yet."
-    _LCD.drawString(a, (_W - _LCD.textWidth(a)) // 2, 40)
+    _LCD.drawString(a, (_W - _LCD.textWidth(a)) // 2, 36)
     _LCD.setTextColor(_GRAY_MID, _BLACK)
-    b = "Edit wifi_event.py with"
-    c = "your network and reboot."
-    _LCD.drawString(b, (_W - _LCD.textWidth(b)) // 2, 62)
-    _LCD.drawString(c, (_W - _LCD.textWidth(c)) // 2, 76)
+    b = "Ask a grown-up to fix WiFi"
+    c = "(open wifi_event.py)"
+    _LCD.drawString(b, (_W - _LCD.textWidth(b)) // 2, 58)
+    _LCD.drawString(c, (_W - _LCD.textWidth(c)) // 2, 72)
+    d = "ESC / Q  quit"
+    _LCD.drawString(d, (_W - _LCD.textWidth(d)) // 2, 90)
 
 
 def _splash(ip):
@@ -369,10 +371,15 @@ def _do_fetch():
     time.sleep_ms(_STEP_PAUSE_MS)
     s = socket.socket()
     try:
+        s.settimeout(5)
         try:
             s.connect(addr)
         except Exception as e:
-            _trace(lines, "   {}".format(e), _RED)
+            err = str(e)
+            if "111" in err or "ECONNREFUSED" in err or "refused" in err.lower():
+                _trace(lines, "   Joke server not running?", _RED)
+            else:
+                _trace(lines, "   Connect failed: {}".format(e), _RED)
             return None
 
         _trace(lines, "3. Sending GET request...")
@@ -399,6 +406,8 @@ def _do_fetch():
                 if not chunk:
                     break
                 buf += chunk
+                if len(buf) > 4096:
+                    break
         except Exception as e:
             _trace(lines, "   recv failed: {}".format(e), _RED)
             return None
@@ -420,7 +429,7 @@ def _do_fetch():
 
 
 def _key_intent(k):
-    """('exit' | 'fetch' | 'up' | 'down' | None).
+    """Returns a tuple intent or None, matching the suite convention.
 
     Space / Enter fetch; ESC / Q exit; ``;`` `.` (the keys with
     physical up / down arrow labels on the Cardputer-Adv) scroll
@@ -429,10 +438,10 @@ def _key_intent(k):
     if k is None:
         return None
     if isinstance(k, int):
-        if k == 0x1B:
-            return "exit"
+        if k in (0x1B, 0x08, 0x09, 0x7F, 0x03):
+            return ("exit",)
         if k in (0x0A, 0x0D, 0x20):
-            return "fetch"
+            return ("fetch",)
         if 0x20 <= k <= 0x7E:
             k = chr(k)
         else:
@@ -441,13 +450,13 @@ def _key_intent(k):
         return None
     ch = k.lower()
     if ch == "q":
-        return "exit"
+        return ("exit",)
     if ch == " ":
-        return "fetch"
+        return ("fetch",)
     if ch in ("w", ";"):
-        return "up"
+        return ("up",)
     if ch in ("s", "."):
-        return "down"
+        return ("down",)
     return None
 
 
@@ -465,7 +474,8 @@ def run():
         try:
             while True:
                 kb.tick()
-                if _key_intent(kb.get_key()) == "exit":
+                intent = _key_intent(kb.get_key())
+                if intent is not None and intent[0] == "exit":
                     return
                 time.sleep_ms(40)
         finally:
@@ -481,17 +491,21 @@ def run():
         while True:
             kb.tick()
             intent = _key_intent(kb.get_key())
-            if intent == "exit":
+            if intent is None:
+                _fact_tick()
+                time.sleep_ms(40)
+                continue
+            if intent[0] == "exit":
                 return
-            if intent == "fetch":
+            if intent[0] == "fetch":
                 body = _do_fetch()
                 if body:
                     _show_fact(body)
                 else:
-                    _show_fact("(try again)")
-            elif intent == "up":
+                    _show_fact("Press SPACE to try again")
+            elif intent[0] == "up":
                 _scroll_fact(-1)
-            elif intent == "down":
+            elif intent[0] == "down":
                 _scroll_fact(1)
             _fact_tick()
             time.sleep_ms(40)

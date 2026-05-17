@@ -278,6 +278,14 @@ Percent-encode any `%` you want to send literally (e.g. wttr.in's
 `%C` placeholder becomes `%25C` in the URL) so the server's URL
 parser doesn't try to decode it as a percent-escape.
 
+The example above hits `wttr.in`; `joke_fetcher.py` itself uses the
+local `joke_server.py` you'll run on your laptop — same raw-socket
+pattern, just pointing at `_HOST` (your laptop's LAN IP) instead of
+`wttr.in`. Find your laptop's LAN IP with `ipconfig getifaddr en0`
+(macOS), `ip -4 addr show` (Linux), or `ipconfig | findstr IPv4`
+(Windows). That's the value you paste into `_HOST` in
+`joke_fetcher.py`.
+
 ---
 
 ## 7. Persistent settings via NVS
@@ -374,6 +382,19 @@ WiFi connect that doesn't survive reboot, your app may show
 "No WiFi" after the push. Make the WiFi persistent in
 `wifi_event.py` before iterating heavily, or you'll fight this
 every push.
+
+**Warning — home WiFi credentials in a public repo.** If you bake
+your home SSID + password into `wifi_event.py`, add that file to
+`.gitignore` before committing, or use a separate untracked file.
+The event-default credentials in this repo are intentionally public
+(a dedicated hotspot with no internet access); your home password is
+not. A good check: `grep -n SSID wifi_event.py` before every commit
+to make sure you haven't left real credentials in place.
+
+To find your laptop's LAN IP for `_HOST` in `joke_fetcher.py`:
+- macOS: `ipconfig getifaddr en0`
+- Linux: `ip -4 addr show | grep inet`
+- Windows: `ipconfig | findstr IPv4`
 
 ---
 
