@@ -271,21 +271,23 @@ _BURST_CY = _BURST_Y + _BURST_H // 2
 
 
 def _draw_burst_frame(frame_idx):
-    """Draw one frame of the orange starburst into the right region.
+    """Paint a single static frame of the orange starburst.
 
-    Each frame is a flat bytes object of (y, x, length) triples
-    describing horizontal runs of opaque orange pixels on a black
-    background. We clear the bounding box once (so last frame's
-    spokes don't ghost) then issue one fillRect per run.
+    Called once per launcher repaint from ``_draw_chrome`` (which has
+    just done a ``fillScreen(_BLACK)``), so we just stamp the orange
+    runs on top — no clearing needed. Originally this animated through
+    all 16 frames, but the Cardputer-Adv's SPI panel is slow enough
+    that any repaint of this region reads as a flicker; a static logo
+    is the simplest fix.
 
-    Silently no-ops if ``burst_frames`` wasn't importable — the
-    launcher still renders the menu + hints without the animation.
+    ``frame_idx`` is kept for call-site compatibility but in practice
+    we only ever pass 0. Silently no-ops if ``burst_frames`` wasn't
+    importable — the launcher still renders the menu + hints.
     """
     if _burst is None:
         return
     data = _burst.FRAMES[frame_idx % len(_burst.FRAMES)]
     color = _burst.COLOR
-    _LCD.fillRect(_BURST_X, _BURST_Y, _BURST_W, _BURST_H, _BLACK)
     i = 0
     n = len(data)
     while i < n:
@@ -297,10 +299,9 @@ def _draw_burst_frame(frame_idx):
 
 
 def _draw_chrome(apps, cursor, scroll_top=0):
-    """Full repaint of chrome + menu (NOT the burst animation — that
-    ticks on its own cadence in the main loop). Fast enough to just
-    redraw on cursor move; at 240x135 the whole buffer is small and
-    the panel push takes a few ms."""
+    """Full repaint of chrome + menu + the (static) burst logo. Fast
+    enough to just redraw on cursor move; at 240x135 the whole buffer
+    is small and the panel push takes a few ms."""
     _LCD.fillScreen(_BLACK)
 
     # Header.
@@ -482,7 +483,7 @@ def main():
     # a MatrixKeyboard() constructed too early gets permanently stuck
     # returning None from get_key() for the life of the process. The
     # LCD still draws fine (M5.begin() initialized it earlier in boot.py)
-    # so this shows up as "animation plays but keys never register" —
+    # so this shows up as "menu paints but keys never register" —
     # confusing, because the launcher looks healthy.
     #
     # Empirically, 800 ms of pre-kb sleep is enough to let the matrix
@@ -494,15 +495,6 @@ def main():
     # from the previous app's reset chain, or the initial power-on
     # flurry).
     time.sleep_ms(400)
-
-    # Burst animation state. We tick one frame per FRAME_MS on top of
-    # the 40 ms keyboard poll — so ~every other iteration advances a
-    # frame. The burst region is disjoint from the menu/chrome, so we
-    # never need to repaint the menu just because the animation
-    # advanced; we only repaint the burst's own bounding box.
-    frame = 0
-    frame_ms = _burst.FRAME_MS if _burst is not None else 80
-    last_frame_ms = time.ticks_ms()
 
     while True:
         kb.tick()
@@ -526,24 +518,10 @@ def main():
         elif intent == "launch":
             _, mod_name = apps[cursor]
             _launch(mod_name)
-            # If _launch returns (error path), redraw menu. Reset the
-            # burst phase so the animation restarts from frame 0 for
-            # visual consistency with a fresh launcher entry.
+            # If _launch returns (error path), redraw menu.
             _draw_chrome(apps, cursor, scroll_top)
-            frame = 0
-            last_frame_ms = time.ticks_ms()
             # Debounce so the user's release of Enter doesn't re-fire.
             time.sleep_ms(300)
-
-        # Advance the burst animation if it's time. time.ticks_diff
-        # handles wrap-around safely (ticks_ms rolls over every ~9
-        # hours on MicroPython; not a real concern on a launcher but
-        # cheap insurance).
-        now = time.ticks_ms()
-        if time.ticks_diff(now, last_frame_ms) >= frame_ms:
-            frame += 1
-            _draw_burst_frame(frame)
-            last_frame_ms = now
 
         time.sleep_ms(40)
 
