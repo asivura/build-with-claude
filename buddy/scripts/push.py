@@ -51,7 +51,11 @@ DEFAULT_FILES = [
     "wifi_event.py",
     "apps/claude_buddy.py",
     "apps/hello_cardputer.py",
+    "apps/joke_fetcher.py",
+    "apps/morse.py",
     "apps/snake.py",
+    "apps/spot_the_diff.py",
+    "apps/whack_a_mole.py",
 ]
 
 CHUNK_BYTES = 512  # source bytes per paste-mode write
