@@ -6,3 +6,6 @@ __pycache__/
 .venv/
 venv/
 .env
+
+# Personal post drafts and media (kept local; never published in this public repo)
+posts/
